@@ -37,6 +37,7 @@ class RelaxedIKDemo:
         
       
         self.robot = Robot(setting_file_path, path_to_src, use_ros=False)
+        
         print(f"Robot Articulated Joint names: {self.robot.articulated_joint_names}")
         
         print('\nInitialize Solver...\n')
@@ -47,11 +48,11 @@ class RelaxedIKDemo:
         else:
             assert len(settings['starting_config']) == len(self.robot.articulated_joint_names), \
                     "Starting config length does not match the number of joints"
-           
+        print(self.robot.fk(settings['starting_config']))
         
         self.weight_names  = self.relaxed_ik.get_objective_weight_names()
         self.weight_priors = self.relaxed_ik.get_objective_weight_priors()
-        
+        print(self.weight_names)
         print("\nSolver RelaxedIK initialized!\n")
 
     def get_ee_pose(self):
@@ -116,8 +117,8 @@ if __name__ == '__main__':
     # positions: 3*N 
     # orientations: 4*N (quaternions)
     # tolerances: 6*N
-    positions = [1.0, -0.5, 0.8, 1.0, 0.5, 0.8]               # x0 y0 z0 x1 y1 z1
-    orientations = [0.0, 0.0 ,0.0, 1.0, 0.0, 0.0 ,0.0, 1.0]   # x0 y0 z0 w0 x1 y1 z1 w1
+    positions = [0.039945320566112524,0.06261164714954542,0.6239988292462738, 0.02108768900215712,0.16067970457086186,0.4407956230616221]               # x0 y0 z0 x1 y1 z1
+    orientations = [-0.0709377217685746,0.2979241494835714,0.08245771835903527,0.948372166118237,-0.5025906282436885,-0.30978841295755594,-0.5941753684027692,0.5462503374665199]   # x0 y0 z0 w0 x1 y1 z1 w1
     tolerances = [0,0,0,0,0,0,0,0,0,0,0,0]                    
     
     print("Joint Angles:", relaxed_ik.solve_pose_goals(positions, orientations, tolerances))
