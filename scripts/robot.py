@@ -57,6 +57,10 @@ class Robot():
         assert len(settings['base_links']) == len(settings['ee_links']) 
         self.num_chain = len(settings['base_links'])
         self.num_active_chains = sum(map(lambda x: 1 if x else 0, settings['is_active_chain']))
+        self.active_chain_idx = []
+        for i in range(len(settings['is_active_chain'])):
+            if settings['is_active_chain'][i]:
+                self.active_chain_idx.append(i)
 
         for i in range(self.num_chain):
             arm_chain = self.kdl_tree.getChain( settings['base_links'][i],
@@ -128,8 +132,10 @@ class Robot():
             pose = self.fk_single_chain(self.fk_p_kdls[i], joint_angles[l:r], self.num_jnts[i])
             l = r
             poses.append(pose)
-        
-        return poses
+        active_chain_poses = []
+        for id in self.active_chain_idx:
+            active_chain_poses.append(poses[id])
+        return active_chain_poses
 
     def fk_single_chain_all_frames(self, chain, all_joint_angles):
         # assert len(joint_angles) == num_jnts, "length of input: {}, number of joints: {}".format(len(joint_angles), num_jnts)
