@@ -11,6 +11,7 @@ import yaml
 import argparse
 from timeit import default_timer as timer
 import pickle
+from tqdm import tqdm
 
 from math_utils import get_quaternion_from_euler, euler_from_quaternion, slerp, unpack_pose_xyz_euler
 
@@ -33,7 +34,7 @@ if not args.no_ros:
     import rospy
     from geometry_msgs.msg import Pose, Twist, Vector3
     from sensor_msgs.msg import JointState
-    from relaxed_ik_ros1.msg import EEPoseGoals, EEVelGoals, IKUpdateWeight
+    from relaxed_ik_ros1.msg import EEPoseGoals, EEVelGoals, IKUpdateWeight, ResetJointAngles
     from relaxed_ik_ros1.srv import IKPoseRequest,  IKPose
 else:
     from math_utils import Pose7d as Pose
@@ -230,16 +231,16 @@ class TraceALine:
             if self.use_topic_not_service:
                 self.ee_pose_pub = rospy.Publisher('relaxed_ik/ee_pose_goals', EEPoseGoals, queue_size=5)
                 self.ik_weight_pub = rospy.Publisher('relaxed_ik/ik_update_weight', IKUpdateWeight, queue_size=128)
-                self.ik_reset_pub = rospy.Publisher('relaxed_ik/reset', JointState, queue_size=5)
-                self.query_loss_pub = rospy.Publisher('relaxed_ik/query_loss', JointState, queue_size=5)
+                self.ik_reset_pub = rospy.Publisher('/relaxed_ik/reset_ja', ResetJointAngles, queue_size=5)
+                # self.query_loss_pub = rospy.Publisher('relaxed_ik/query_loss', JointState, queue_size=5)
             else:
                 rospy.wait_for_service('relaxed_ik/solve_pose')
                 self.ik_pose_service = rospy.ServiceProxy('relaxed_ik/solve_pose', IKPose)
             
-            loss = self.query_loss(starting_config)
-            print("Loss:", loss)
+            # loss = self.query_loss(starting_config)
+            # print("Loss:", loss)
             print(starting_config)
-            self.reset(starting_config)
+            
         
             count_down_rate = rospy.Rate(1)
             count_down = 3
@@ -249,7 +250,6 @@ class TraceALine:
                 if count_down == 0:
                     break
                 count_down_rate.sleep()
-
             self.timer = rospy.Timer(rospy.Duration(self.time_between / self.num_per_goal), self.timer_callback)
             self.ik_solver = None
             
@@ -258,8 +258,10 @@ class TraceALine:
             # print(self.ik_solver.weight_names)
             # loss = self.ik_solver.query_loss(starting_config)
             # print(f"Initial Loss: {loss}")
+            self.ik_solver.reset(starting_config)
             pass
             # print(self.trajectory)
+        self.starting_config = starting_config
             
     def generate_trajectory(self, trajs, num_per_goal):
         
@@ -347,11 +349,11 @@ class TraceALine:
     
     def reset(self, config):
         # reset
-        print("RESET:", config)
-        js_msg = JointState()
-        js_msg.header.stamp = rospy.Time.now()
-        js_msg.name = self.robot.articulated_joint_names
-        js_msg.position = config
+        print("publish RESET:", config)
+        js_msg = ResetJointAngles()
+        js_msg.joint_angles = config
+        # if self.ik_reset_pub.get_num_connections() < 1:
+        #     raise AssertionError("aaa")
         self.ik_reset_pub.publish(js_msg)
     
     def query_loss(self, config):
@@ -369,7 +371,9 @@ class TraceALine:
             else:
                 rospy.signal_shutdown("Trajectory finished")
             return
-
+        if self.trajectory_index == 0:
+            self.reset(self.starting_config)
+            time.sleep(1)
         if self.use_topic_not_service:
             ee_pose_goals = EEPoseGoals()
             for i in range(self.robot.num_active_chains):
@@ -385,6 +389,7 @@ class TraceALine:
                 msg = IKUpdateWeight()
                 msg.weight_name = k
                 msg.value = v
+                print(msg)
                 self.ik_weight_pub.publish(msg)
         else:
             req = IKPoseRequest()
@@ -406,7 +411,7 @@ class TraceALine:
         assert self.ik_solver is not None, "IK Solver not initialized."
         assert args.no_ros, "This method is for no-ROS mode"
         ik_solutions = []
-        for j in range(len(self.trajectory)):
+        for j in tqdm(range(len(self.trajectory))):
             positions = []
             orientations = []
             tolerances = []
@@ -424,8 +429,8 @@ class TraceALine:
             ik_solution = self.ik_solver.solve_pose_goals(positions, orientations, tolerances)
             ik_solutions.append(ik_solution)
             loss = self.ik_solver.query_loss(ik_solution)
-            print(f"Loss: {loss}")
-            print(j)
+            # print(f"Loss: {loss}")
+            # print(j)
             
         return ik_solutions
     
@@ -453,15 +458,23 @@ if __name__ == '__main__':
         # initial_file = np.load(path_to_init + '/' + args.init)
     trace_a_line = TraceALine(init_ik)
     
+    
     if not args.no_ros:
         rospy.spin()
         
     if args.no_ros:
         
         ik_list = trace_a_line.get_ik_list_from_traj()
-        ik_list = [movo_jointangles_rik2fik(x) for x in ik_list]
         
-        ik_arr = np.array(ik_list)
-        print(ik_arr.shape)
+        ik_arr = [movo_jointangles_rik2fik(x) for x in ik_list]
+        ik_arr = np.array(ik_arr)
         np.save(f"{fpath}/ik_seq{trace_a_line.episode}.npy", ik_arr)
+        
+        
+        # Try another time to test the reset function
+        trace_a_line.ik_solver.reset(trace_a_line.starting_config)
+        ik_list_1 = trace_a_line.get_ik_list_from_traj()
+        # should be exactly the same
+        print(ik_list[-1])
+        print(ik_list_1[-1])
         
