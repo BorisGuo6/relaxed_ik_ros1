@@ -78,7 +78,7 @@ class TraceALine:
         self.tolerances = []
         self.time_between = 2.0   # time between two keypoints
         self.num_per_goal = 50    # number of intermediate points between two keypoints
-        self.start_from_init_pose = False
+        self.start_from_init_pose = True
         self.side = args.side
         if self.side == "both":
             assert len(args.map_idx) == 2
@@ -86,7 +86,9 @@ class TraceALine:
             self.right_map_id = args.map_idx[1]
         elif self.side == "left":
             self.left_map_id = args.map_idx[0]
+            self.right_map_id = -1
         elif self.side == "right":
+            self.left_map_id = -1
             self.right_map_id = args.map_idx[0]
         else:
             raise NotImplementedError()
@@ -132,6 +134,7 @@ class TraceALine:
             initial_ik = initial_poses[self.left_map_id]
         elif self.side == "right":
             initial_ik = initial_poses[self.right_map_id]
+        assert len(initial_ik) > 0
         
         if initial_ik is not None:
             #if args.no_ros:
@@ -141,7 +144,7 @@ class TraceALine:
                 for ik in initial_ik:
                     conf = list(movo_jointangles_fik2rik(ik, gripper_value=0.9))
                     self.ik_solver.reset(conf)
-                    loss = self.ik_solver.query_loss(conf)
+                    loss = sum(self.ik_solver.query_loss(conf))
                     # print(loss)
                     if loss < min_start_loss:
                         best_starting_config = conf
@@ -157,6 +160,7 @@ class TraceALine:
         self.starting_ee_poses = self.robot.fk(starting_config_translated)
         print(starting_config)
         print(self.starting_ee_poses)
+        # ipdb.set_trace()
         
         trajs = []
         # for traj_file in settings["traj_files"]:
@@ -165,10 +169,20 @@ class TraceALine:
         # for traj_name in args.traj:
         #     trajs.append(np.load(path_to_trajs + '/' + traj_name) + traj_offset)
         if self.side == "both":
-            trajs.append(np.load(f"{path_to_trajs}/traject_6d_{self.episode}_right{self.left_map_id}.npy"))
-            trajs.append(np.load(f"{path_to_trajs}/traject_6d_{self.episode}_left{self.right_map_id}.npy"))
-        else:
-            trajs.append(np.load(f"{path_to_trajs}/traject_6d_{self.episode}_{self.side}{self.left_map_id}.npy"))
+            traj_right = np.load(f"{path_to_trajs}/traject_6d_{self.episode}_right{self.right_map_id}.npy")
+            traj_right[:, 2] = traj_right[:, 2] + 0.015
+            traj_left = np.load(f"{path_to_trajs}/traject_6d_{self.episode}_left{self.left_map_id}.npy")
+            traj_left[:, 2] = traj_left[:, 2] + 0.015
+            trajs.append(traj_right)
+            trajs.append(traj_left)
+        elif self.side == "left":
+            traj_left = np.load(f"{path_to_trajs}/traject_6d_{self.episode}_left{self.left_map_id}.npy")
+            traj_left[:, 2] = traj_left[:, 2] + 0.015
+            trajs.append(traj_left)
+        elif self.side == "right":
+            traj_right = np.load(f"{path_to_trajs}/traject_6d_{self.episode}_right{self.right_map_id}.npy")
+            traj_right[:, 2] = traj_right[:, 2] + 0.015
+            trajs.append(traj_right)
 
         # print(trajs[0].shape, trajs[1].shape)
         
@@ -301,7 +315,7 @@ class TraceALine:
         for i in range(num_keypoints - 1):
             num_empty_updates = num_per_goal
             if self.start_from_init_pose and i == 0:
-                weight_updates.append({
+                upd = {
                     'eepos' : 500.0,
                     'eequat' : 5.0,
                     'minvel'  : 0.5,
@@ -309,12 +323,17 @@ class TraceALine:
                     'minjerk' : 0.1,
                     'selfcollision' : 0.01,
                     'selfcollision_ee' : 2,
-                    'envcollision': 0.5,
                     'maxmanip' : 3.0,
-                })
+                }
+                for arm_idx in range(self.robot.num_chain):
+                    upd[f"envcollision_{arm_idx}"] = 0.5
+                
+                
+                weight_updates.append(upd)
                 num_empty_updates -= 1
             elif self.start_from_init_pose and i == 1:
-                weight_updates.append({
+                
+                upd = {
                     'eequat'  : 5.0,
                     'minvel'  : 0.7,
                     'minacc'  : 0.5,
@@ -322,7 +341,13 @@ class TraceALine:
                     'selfcollision_ee' : 2,
                     'envcollision': 10.0,
                     'jointlimit' : 3.0,
-                })
+                }
+                for arm_idx in range(self.robot.num_chain):
+                    if self.robot.is_active_chain[arm_idx]:
+                        upd[f"envcollision_{arm_idx}"] = 2.0
+                    else:
+                        upd[f"envcollision_{arm_idx}"] = 5.0
+                weight_updates.append(upd)
                 num_empty_updates -= 1
             for _ in range(num_empty_updates):
                 weight_updates.append({})
@@ -352,8 +377,6 @@ class TraceALine:
         print("publish RESET:", config)
         js_msg = ResetJointAngles()
         js_msg.joint_angles = config
-        # if self.ik_reset_pub.get_num_connections() < 1:
-        #     raise AssertionError("aaa")
         self.ik_reset_pub.publish(js_msg)
     
     def query_loss(self, config):
@@ -428,8 +451,9 @@ class TraceALine:
             # print(positions, orientations, tolerances)
             ik_solution = self.ik_solver.solve_pose_goals(positions, orientations, tolerances)
             ik_solutions.append(ik_solution)
-            loss = self.ik_solver.query_loss(ik_solution)
-            # print(f"Loss: {loss}")
+            losses = self.ik_solver.query_loss(ik_solution)
+            print(f"Total Loss: {sum(losses)}")
+            print(self.get_individual_loss(losses, ['eepos', "eequat"]))
             # print(j)
             
         return ik_solutions
@@ -444,6 +468,19 @@ class TraceALine:
                 ja_out.append(joint_angles[joint_idx])
                 
         return ja_out
+    
+    def get_individual_loss(self, losses, query):
+        assert self.ik_solver is not None
+        ret = {}
+        for k in query:
+            vals = []
+            for i, name in enumerate(self.ik_solver.weight_names):
+                if k == name:
+                    vals.append(losses[i])
+            ret[k] = vals
+        return ret
+                    
+                
     
 if __name__ == '__main__':
     fpath = os.path.dirname(os.path.abspath(__file__))
@@ -472,9 +509,9 @@ if __name__ == '__main__':
         
         
         # Try another time to test the reset function
-        trace_a_line.ik_solver.reset(trace_a_line.starting_config)
-        ik_list_1 = trace_a_line.get_ik_list_from_traj()
-        # should be exactly the same
-        print(ik_list[-1])
-        print(ik_list_1[-1])
+        # trace_a_line.ik_solver.reset(trace_a_line.starting_config)
+        # ik_list_1 = trace_a_line.get_ik_list_from_traj()
+        # # should be exactly the same
+        # print(ik_list[-1])
+        # print(ik_list_1[-1])
         
