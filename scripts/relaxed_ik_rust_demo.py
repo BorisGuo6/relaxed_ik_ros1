@@ -41,6 +41,9 @@ class RelaxedIKDemo:
         
         print('\nInitialize Solver...\n')
         self.relaxed_ik = RelaxedIKRust(setting_file_path)
+        
+        ##DEBUG
+        self.setting_file_path = setting_file_path
 
         if 'starting_config' not in settings:
             settings['starting_config'] = [0.0] * len(self.robot.articulated_joint_names)
@@ -57,6 +60,11 @@ class RelaxedIKDemo:
         print(len([1 for x in self.weight_names if 'selfcollision' in x]), 'self collision pairs')
         print("\nSolver RelaxedIK initialized!\n")
 
+    def reload_ik_rust(self):
+        self.relaxed_ik.__exit__(None, None, None)
+        del self.relaxed_ik
+        self.relaxed_ik = RelaxedIKRust(self.setting_file_path)
+        
     def get_ee_pose(self):
         ee_poses = self.relaxed_ik.get_ee_positions()
         ee_poses = np.array(ee_poses)
@@ -103,6 +111,10 @@ class RelaxedIKDemo:
         if not weights_dict:
             return 
         print(weights_dict)
+        
+        for k in weights_dict:
+            if k not in self.weight_names:
+                raise KeyError(k)
         for i in range(len(self.weight_names)):
             weight_name = self.weight_names[i]
             if weight_name in weights_dict:

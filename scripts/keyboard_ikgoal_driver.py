@@ -48,6 +48,7 @@ class KeyboardInput:
         self.chains_def = settings['chains_def']
         starting_config_translated = self.translate_config(settings['starting_config'], self.chains_def)
         # self.ee_poses =  self.robot.fk(settings['starting_config'])
+        print(starting_config_translated)
         self.starting_ee_poses = self.robot.fk(starting_config_translated)
 
         self.ee_pose_pub = rospy.Publisher('relaxed_ik/ee_pose_goals', EEPoseGoals, queue_size=5)
@@ -68,9 +69,9 @@ class KeyboardInput:
         print(self.starting_ee_poses)
         p0, p1 = unpack_pose_xyz_euler(self.starting_ee_poses[0]), unpack_pose_xyz_euler(self.starting_ee_poses[1])
         # self.position = [[0.8,-0.5,0.8],[0.8,0.5,0.8]] 
-        # self.orientation = [[0,0,0],[0,0,0]]
+        self.orientation = [[0,0,0],[0,0,0]]
         self.position    = [list(p0[0]), list(p1[0])]
-        self.orientation = [list(p0[1]), list(p1[1])]
+        # self.orientation = [list(p0[1]), list(p1[1])]
         # print(self.position,self.orientation)
         
         
