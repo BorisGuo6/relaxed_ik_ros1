@@ -116,7 +116,11 @@ class TraceALine:
         setting_file = open(setting_file_path, 'r')
         settings = yaml.load(setting_file, Loader=yaml.FullLoader)
         
-        urdf_file = open(path_to_src + '/configs/urdfs/' + settings["urdf"], 'r')
+        urdf_path = settings["urdf"]
+        if urdf_path[0] == '/': # absolute
+            urdf_file = open(settings["urdf"], 'r')
+        else:
+            urdf_file = open(path_to_src + '/configs/urdfs/' + settings["urdf"], 'r')
         urdf_string = urdf_file.read()
         if not args.no_ros:
             rospy.set_param('robot_description', urdf_string)

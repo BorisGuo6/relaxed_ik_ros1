@@ -36,8 +36,10 @@ class Robot():
         settings = yaml.load(setting_file, Loader=yaml.FullLoader)
 
         urdf_name = settings["urdf"]
-        
-        self.robot = URDF.from_xml_file(path_to_src + "/configs/urdfs/" + urdf_name)
+        if urdf_name[0] == '/':
+            self.robot = URDF.from_xml_file(urdf_name)
+        else:
+            self.robot = URDF.from_xml_file(path_to_src + "/configs/urdfs/" + urdf_name)
         self.kdl_tree = kdl_tree_from_urdf_model(self.robot)
         
         # all non-fixed joint         

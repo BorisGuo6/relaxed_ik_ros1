@@ -32,9 +32,6 @@ class RelaxedIKDemo:
         setting_file = open(setting_file_path, 'r')
         settings = yaml.load(setting_file, Loader=yaml.FullLoader)
        
-        urdf_file = open(path_to_src + '/configs/urdfs/' + settings["urdf"], 'r')
-        urdf_string = urdf_file.read()
-        
       
         self.robot = Robot(setting_file_path, path_to_src, use_ros=False)
         print(f"Robot Articulated Joint names: {self.robot.articulated_joint_names}")
