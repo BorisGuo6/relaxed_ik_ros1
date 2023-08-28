@@ -69,9 +69,9 @@ class KeyboardInput:
         print(self.starting_ee_poses)
         p0, p1 = unpack_pose_xyz_euler(self.starting_ee_poses[0]), unpack_pose_xyz_euler(self.starting_ee_poses[1])
         # self.position = [[0.8,-0.5,0.8],[0.8,0.5,0.8]] 
-        self.orientation = [[0,0,0],[0,0,0]]
+        # self.orientation = [[0,0,0],[0,0,0]]
         self.position    = [list(p0[0]), list(p1[0])]
-        # self.orientation = [list(p0[1]), list(p1[1])]
+        self.orientation = [list(p0[1]), list(p1[1])]
         # print(self.position,self.orientation)
         
         
@@ -94,13 +94,7 @@ class KeyboardInput:
         print("starting listener")
         keyboard_listener.start()
         
-        # reduce weights of envcollision on figers. for testing purposes
-        weight_update = {f'envcollision_{arm_idx}' : 1.0 for arm_idx in [1,2,3,5,6,7]}
-        for k, v in weight_update.items():
-            msg = IKUpdateWeight()
-            msg.weight_name = k
-            msg.value = v
-            self.ik_weight_pub.publish(msg)
+        
         
 
     def on_press(self, key):
@@ -165,6 +159,17 @@ class KeyboardInput:
         #self.orientation = [0,0,0]
 
     def timer_callback(self, event):
+        # reduce weights of envcollision on figers. for testing purposes
+        if self.seq == 1:
+            weight_update = {f'envcollision_{arm_idx}' : 0.1 for arm_idx in [1,2,3,5,6,7]}
+            weight_update.update({f'envcollision_{arm_idx}' : 1.0 for arm_idx in [0, 4]})
+            for k, v in weight_update.items():
+                msg = IKUpdateWeight()
+                msg.weight_name = k
+                msg.value = v
+                self.ik_weight_pub.publish(msg)
+        #### 
+        
         msg = EEPoseGoals()
 
         for i in range(self.robot.num_active_chains):

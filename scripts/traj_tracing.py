@@ -374,12 +374,8 @@ class TraceALine:
             num_empty_updates = num_per_goal
             if self.start_from_init_pose and i == 0:
                 upd = {
-                    'eepos_x' : 200.0,
-                    'eepos_y' : 200.0,
-                    'eepos_z' : 200.0,
-                    'eequat_x' : 10.0,
-                    'eequat_y' : 10.0,
-                    'eequat_z' : 10.0,
+                    'eepos' : 500,
+                    'eequat' : 100,
                     'minvel'  : 0.5,
                     'minacc'  : 0.3,
                     'minjerk' : 0.1,
@@ -506,7 +502,7 @@ class TraceALine:
             losses = self.ik_solver.query_loss(ik_solution)
             
             print(f"Total Loss: {sum(losses)}")
-            print(self.get_individual_loss(losses, ['eepos_x','eepos_y','eepos_z', "eequat_x","eequat_y", "eequat_z"]))
+            print(self.get_individual_loss(losses, ['eepos_0', 'eequat_0', 'eepos_4', 'eequat_4']))
             # print(j)
             
         return ik_solutions
