@@ -179,7 +179,7 @@ class RelaxedIK:
         ik_solution = self.relaxed_ik.solve_position(positions, orientations, tolerances)
         # print(self.robot.articulated_joint_names)
         # print(ik_solution)
-        # print(f"{(time.time() - t0)*1000:.2f}ms")
+        print(f"{(time.time() - t0)*1000:.2f}ms")
         # Publish the joint angle solution
         self.js_msg.header.stamp = rospy.Time.now()
         self.js_msg.position = ik_solution
@@ -252,8 +252,9 @@ class RelaxedIK:
 if __name__ == '__main__':
     rospy.init_node('relaxed_ik')
     print("RELAXED_IK_RUST.PY")
-    relaxed_ik = RelaxedIK()
-    # relaxed_ik.relaxed_ik.set_env_collision_tip_offset(0)
+    relaxed_ik = RelaxedIK()    
+    
+    # relaxed_ik.relaxed_ik.set_collision_end_indices([])
     # relaxed_ik.update_objective_weights({
     #     'eepos_4' : 0.0,
     #     'eequat_4' : 0.0,

@@ -24,7 +24,7 @@ class RelaxedIKDemo:
 
         setting_file_path = path_to_src + '/configs/settings.yaml'
 
-        os.chdir(path_to_src)
+        # os.chdir(path_to_src)
 
         # Load the infomation
         
@@ -157,20 +157,46 @@ if __name__ == '__main__':
     # relaxed_ik.relaxed_ik.set_objective_weight_priors(weights)
     
     ###################
-    N = 3
+    N = 5
     run_times = []
-    for _ in range(N):
+    
+    
+    # pcd_w = [10.0, 5.0, 1.0, 0.1, 0.01]
+    pcd_w = [50.0, 50.0, 10.0, 10.0, 5.0, 1.0, 0.1, 0.01, 0.01, 0.01]
+    # pcd_w = [50.0, 50.0]
+    ee_w  = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+    # pcd_w = [0.0, 0.0, 0.0, 0.0,0.0, 0.0, 0.0, 0.0,]
+    N = len(pcd_w)
+    relaxed_ik.update_objective_weights({
+        "eepos_0": 100.0,
+        "eepos_1": 100.0
+    })
+    joint_angle_list = []
+    
+    for i in range(N):
         print("-"*50)
         t0 = time.time()
         ja = relaxed_ik.solve_pose_goals(positions, orientations, tolerances)
+        joint_angle_list.append(ja)
         print("Joint Angles:", ja)
         t1 = time.time()
         # positions[1] += 0.001
         run_times.append(t1 - t0)
         print('loss:', relaxed_ik.query_loss(ja))  
+        print(f"time: {(t1 - t0)*1000}ms")
         
+        
+        relaxed_ik.update_objective_weights({
+            "envcollision_pcd_0" : pcd_w[i],
+            "envcollision_pcd_1" : pcd_w[i],
+            "eepos_0": ee_w[i],
+            "eepos_0": ee_w[i],
+        })
+
         print("-"*50)
+    
     print(f"Average time: {sum(run_times) / len(run_times) * 1000: .3f} ms.")
+    np.save('/home/madcreeper/ik_recover/grasp_traj.npy', np.array(joint_angle_list))
     
     
     

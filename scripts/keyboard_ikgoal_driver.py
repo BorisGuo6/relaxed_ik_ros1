@@ -160,14 +160,14 @@ class KeyboardInput:
 
     def timer_callback(self, event):
         # reduce weights of envcollision on figers. for testing purposes
-        if self.seq == 1:
-            weight_update = {f'envcollision_{arm_idx}' : 0.1 for arm_idx in [1,2,3,5,6,7]}
-            weight_update.update({f'envcollision_{arm_idx}' : 1.0 for arm_idx in [0, 4]})
-            for k, v in weight_update.items():
-                msg = IKUpdateWeight()
-                msg.weight_name = k
-                msg.value = v
-                self.ik_weight_pub.publish(msg)
+        # if self.seq == 1:
+        #     weight_update = {f'envcollision_{arm_idx}' : 0.1 for arm_idx in [1,2,3,5,6,7]}
+        #     weight_update.update({f'envcollision_{arm_idx}' : 1.0 for arm_idx in [0, 4]})
+        #     for k, v in weight_update.items():
+        #         msg = IKUpdateWeight()
+        #         msg.weight_name = k
+        #         msg.value = v
+        #         self.ik_weight_pub.publish(msg)
         #### 
         
         msg = EEPoseGoals()
