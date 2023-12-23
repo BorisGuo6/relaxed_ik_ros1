@@ -115,7 +115,7 @@ class RelaxedIKDemo:
         for i in range(len(self.weight_names)):
             weight_name = self.weight_names[i]
             if weight_name in weights_dict:
-                self.weight_priors[i] = weights_dict[weight_name]
+                self.weight_priors[i] = float(weights_dict[weight_name])
         self.relaxed_ik.set_objective_weight_priors(self.weight_priors)
             
     
@@ -133,70 +133,59 @@ if __name__ == '__main__':
     orientations = [0.0, 0.0 ,0.0, 1.0, 0.0, 0.0 ,0.0, 1.0]   # x0 y0 z0 w0 x1 y1 z1 w1
     tolerances = [0,0,0,0,0,0,0,0,0,0,0,0]                    
     
-    # relaxed_ik.update_objective_weights({
-        
-    # })
-    
-    # allegro hand
-    # positions = list(np.array([0.18671839, 0.29608066, 0.17582884]) - np.array([0.15, 0.15, 0.15])) + list(np.array([0.27055018, 0.24076818, 0.1409142]) -np.array([0.15, 0.15, 0.15]))
-    # ## set ik solver 
-    # weights = relaxed_ik.weight_priors[:]
-    # for i in range(0, 3):
-    #     weights[i] = 50
-    # for i in range(3, 6):
-    #     weights[i] = 0
-    # weights[6] = 50
-    # for i in range(7, 10):
-    #     weights[i] = 50
-    # for i in range(10, 13):
-    #     weights[i] = 0
-    # weights[13] = 50
-    # for i in range(32, len(weights)):
-    #     weights[i] = 0
-
-    # relaxed_ik.relaxed_ik.set_objective_weight_priors(weights)
-    
-    ###################
-    N = 5
     run_times = []
     
-    
-    # pcd_w = [10.0, 5.0, 1.0, 0.1, 0.01]
-    pcd_w = [50.0, 50.0, 10.0, 10.0, 5.0, 1.0, 0.1, 0.01, 0.01, 0.01]
-    # pcd_w = [50.0, 50.0]
-    ee_w  = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
-    # pcd_w = [0.0, 0.0, 0.0, 0.0,0.0, 0.0, 0.0, 0.0,]
-    N = len(pcd_w)
     relaxed_ik.update_objective_weights({
         "eepos_0": 100.0,
         "eepos_1": 100.0
     })
-    joint_angle_list = []
+    joint_angle_list = []    
     
-    for i in range(N):
-        print("-"*50)
-        t0 = time.time()
-        ja = relaxed_ik.solve_pose_goals(positions, orientations, tolerances)
-        joint_angle_list.append(ja)
-        print("Joint Angles:", ja)
-        t1 = time.time()
-        # positions[1] += 0.001
-        run_times.append(t1 - t0)
-        print('loss:', relaxed_ik.query_loss(ja))  
-        print(f"time: {(t1 - t0)*1000}ms")
-        
-        
-        relaxed_ik.update_objective_weights({
-            "envcollision_pcd_0" : pcd_w[i],
-            "envcollision_pcd_1" : pcd_w[i],
-            "eepos_0": ee_w[i],
-            "eepos_0": ee_w[i],
-        })
+    def execute_grasp_ik(positions, orientations, tolerances, pcd_w, ee_w):
+        N = len(pcd_w)
+        for i in range(N):
+            print("-"*50)
+            t0 = time.time()
+            relaxed_ik.update_objective_weights({
+                "envcollision_pcd_0" : pcd_w[i][0],
+                "envcollision_pcd_1" : pcd_w[i][1],
+                "eepos_0": ee_w[i][0],
+                "eepos_1": ee_w[i][1],
+            })
+            ja = relaxed_ik.solve_pose_goals(positions, orientations, tolerances)
+            joint_angle_list.append(ja)
+            print("Joint Angles:", ja)
+            t1 = time.time()
+            run_times.append(t1 - t0)
+            print('loss:', relaxed_ik.query_loss(ja))  
+            print(f"time: {(t1 - t0)*1000}ms")
 
-        print("-"*50)
+
+            
+
+            print("-"*50)
+    
+    # cup grasp v0
+    pcd_w = [(50, 50), (50, 50), (10, 10), (10, 10), (5, 5), (1, 1), (0.1, 0.1), (0.01, 0.01), (0.01, 0.01), (0.01, 0.01),]
+    ee_w  = [(100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100),]
+    execute_grasp_ik(positions, orientations, tolerances, pcd_w, ee_w)
+    
+    
+    
+    pcd_w = [(0.01, 0.01), (0.01, 0.1), (0.01, 1), (0.01, 5), (0.01, 10), (0.01, 50), (0.01, 50), (0.01, 50)]
+    ee_w  = [(500, 100), (500, 100), (500, 100), (500, 100), (500, 100), (500, 100), (500, 100), (500, 100), (500, 100), (500, 100),]
+    execute_grasp_ik(positions, orientations, tolerances, pcd_w, ee_w)
+    
+    
+    positions[4] += 0.05
+    
+    pcd_w = [(0.01, 50), (0.01, 10), (0.01, 5), (0.01, 1), (0.01, 0.1), (0.01, 0.01), (0.01, 0.01), (0.01, 0.01)]
+    ee_w  = [(500, 100), (500, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100), (100, 100),]
+    execute_grasp_ik(positions, orientations, tolerances, pcd_w, ee_w)
+    
     
     print(f"Average time: {sum(run_times) / len(run_times) * 1000: .3f} ms.")
-    np.save('/home/madcreeper/ik_recover/grasp_traj.npy', np.array(joint_angle_list))
+    np.save('/home/madcreeper/ik_recover/grasp_traj_0.npy', np.array(joint_angle_list))
     
     
     

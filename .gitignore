@@ -19,3 +19,7 @@ rmoo_files/
 #traj_files/
 #episodes/
 #init_positions/
+
+# data files
+*.npy
+*.bin
