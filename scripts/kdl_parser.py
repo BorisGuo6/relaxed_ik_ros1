@@ -62,7 +62,9 @@ def urdf_joint_to_kdl_joint(jnt):
     if jnt.joint_type == 'fixed':
         # Use None instead of Fixed if PyKDL version is old/incompatible
         # return kdl.Joint(jnt.name, getattr(kdl.Joint, 'None'))
-        return kdl.Joint(jnt.name, getattr(kdl.Joint, 'Fixed'))
+        # return kdl.Joint(jnt.name, getattr(kdl.Joint, 'Fixed'))
+        joint = kdl.Joint(jnt.name, getattr(kdl.Joint, 'Fixed') if hasattr(kdl.Joint, 'Fixed') else getattr(kdl.Joint, 'None'))
+        return joint
     axis = kdl.Vector(*[float(s) for s in jnt.axis])
     if jnt.joint_type == 'revolute':
         return kdl.Joint(jnt.name, origin_frame.p,
