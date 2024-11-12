@@ -48,6 +48,7 @@ class KeyboardInput:
         self.chains_def = settings['chains_def']
         starting_config_translated = self.translate_config(settings['starting_config'], self.chains_def)
         # self.ee_poses =  self.robot.fk(settings['starting_config'])
+        print(starting_config_translated)
         self.starting_ee_poses = self.robot.fk(starting_config_translated)
 
         self.ee_pose_pub = rospy.Publisher('relaxed_ik/ee_pose_goals', EEPoseGoals, queue_size=5)
@@ -93,13 +94,7 @@ class KeyboardInput:
         print("starting listener")
         keyboard_listener.start()
         
-        # reduce weights of envcollision on figers. for testing purposes
-        weight_update = {f'envcollision_{arm_idx}' : 1.0 for arm_idx in [1,2,3,5,6,7]}
-        for k, v in weight_update.items():
-            msg = IKUpdateWeight()
-            msg.weight_name = k
-            msg.value = v
-            self.ik_weight_pub.publish(msg)
+        
         
 
     def on_press(self, key):
@@ -164,6 +159,17 @@ class KeyboardInput:
         #self.orientation = [0,0,0]
 
     def timer_callback(self, event):
+        # reduce weights of envcollision on figers. for testing purposes
+        if self.seq == 1:
+            weight_update = {f'envcollision_{arm_idx}' : 0.1 for arm_idx in [1,2,3,5,6,7]}
+            weight_update.update({f'envcollision_{arm_idx}' : 1.0 for arm_idx in [0, 4]})
+            for k, v in weight_update.items():
+                msg = IKUpdateWeight()
+                msg.weight_name = k
+                msg.value = v
+                self.ik_weight_pub.publish(msg)
+        #### 
+        
         msg = EEPoseGoals()
 
         for i in range(self.robot.num_active_chains):

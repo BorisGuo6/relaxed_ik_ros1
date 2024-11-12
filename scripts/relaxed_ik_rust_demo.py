@@ -32,15 +32,15 @@ class RelaxedIKDemo:
         setting_file = open(setting_file_path, 'r')
         settings = yaml.load(setting_file, Loader=yaml.FullLoader)
        
-        urdf_file = open(path_to_src + '/configs/urdfs/' + settings["urdf"], 'r')
-        urdf_string = urdf_file.read()
-        
       
         self.robot = Robot(setting_file_path, path_to_src, use_ros=False)
         print(f"Robot Articulated Joint names: {self.robot.articulated_joint_names}")
         
         print('\nInitialize Solver...\n')
         self.relaxed_ik = RelaxedIKRust(setting_file_path)
+        
+        ##DEBUG
+        self.setting_file_path = setting_file_path
 
         if 'starting_config' not in settings:
             settings['starting_config'] = [0.0] * len(self.robot.articulated_joint_names)
@@ -57,6 +57,11 @@ class RelaxedIKDemo:
         print(len([1 for x in self.weight_names if 'selfcollision' in x]), 'self collision pairs')
         print("\nSolver RelaxedIK initialized!\n")
 
+    def reload_ik_rust(self):
+        self.relaxed_ik.__exit__(None, None, None)
+        del self.relaxed_ik
+        self.relaxed_ik = RelaxedIKRust(self.setting_file_path)
+        
     def get_ee_pose(self):
         ee_poses = self.relaxed_ik.get_ee_positions()
         ee_poses = np.array(ee_poses)
@@ -103,6 +108,10 @@ class RelaxedIKDemo:
         if not weights_dict:
             return 
         print(weights_dict)
+        
+        for k in weights_dict:
+            if k not in self.weight_names:
+                raise KeyError(k)
         for i in range(len(self.weight_names)):
             weight_name = self.weight_names[i]
             if weight_name in weights_dict:
@@ -119,17 +128,50 @@ if __name__ == '__main__':
     # positions: 3*N 
     # orientations: 4*N (quaternions)
     # tolerances: 6*N
+    
     positions = [1.0, -0.5, 0.8, 1.0, 0.5, 0.8]               # x0 y0 z0 x1 y1 z1
     orientations = [0.0, 0.0 ,0.0, 1.0, 0.0, 0.0 ,0.0, 1.0]   # x0 y0 z0 w0 x1 y1 z1 w1
     tolerances = [0,0,0,0,0,0,0,0,0,0,0,0]                    
     
-    N = 100
+    
+    
+    # allegro hand
+    # positions = list(np.array([0.18671839, 0.29608066, 0.17582884]) - np.array([0.15, 0.15, 0.15])) + list(np.array([0.27055018, 0.24076818, 0.1409142]) -np.array([0.15, 0.15, 0.15]))
+    # ## set ik solver 
+    # weights = relaxed_ik.weight_priors[:]
+    # for i in range(0, 3):
+    #     weights[i] = 50
+    # for i in range(3, 6):
+    #     weights[i] = 0
+    # weights[6] = 50
+    # for i in range(7, 10):
+    #     weights[i] = 50
+    # for i in range(10, 13):
+    #     weights[i] = 0
+    # weights[13] = 50
+    # for i in range(32, len(weights)):
+    #     weights[i] = 0
+
+    # relaxed_ik.relaxed_ik.set_objective_weight_priors(weights)
+    
+    ###################
+    
+    N = 10
     run_times = []
     for _ in range(N):
+        print("-"*50)
         t0 = time.time()
-        print("Joint Angles:", relaxed_ik.solve_pose_goals(positions, orientations, tolerances))
+        ja = relaxed_ik.solve_pose_goals(positions, orientations, tolerances)
+        print("Joint Angles:", ja)
         t1 = time.time()
-        positions[1] += 0.001
+        # positions[1] += 0.001
         run_times.append(t1 - t0)
-
+        
+        print('position loss of first finger: ', relaxed_ik.query_loss(ja)[0:7])
+        print('position loss of second finger: ', relaxed_ik.query_loss(ja)[7:14])  #
+        print("-"*50)
     print(f"Average time: {sum(run_times) / len(run_times) * 1000: .3f} ms.")
+    
+    
+    
+    

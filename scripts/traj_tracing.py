@@ -76,8 +76,8 @@ class TraceALine:
             self.loop = False
         
         self.tolerances = []
-        self.time_between = 2.0   # time between two keypoints
-        self.num_per_goal = 50    # number of intermediate points between two keypoints
+        self.time_between = 5.0   # time between two keypoints
+        self.num_per_goal = 20    # number of intermediate points between two keypoints
         self.start_from_init_pose = True
         self.side = args.side
         if self.side == "both":
@@ -116,7 +116,11 @@ class TraceALine:
         setting_file = open(setting_file_path, 'r')
         settings = yaml.load(setting_file, Loader=yaml.FullLoader)
         
-        urdf_file = open(path_to_src + '/configs/urdfs/' + settings["urdf"], 'r')
+        urdf_path = settings["urdf"]
+        if urdf_path[0] == '/': # absolute
+            urdf_file = open(settings["urdf"], 'r')
+        else:
+            urdf_file = open(path_to_src + '/configs/urdfs/' + settings["urdf"], 'r')
         urdf_string = urdf_file.read()
         if not args.no_ros:
             rospy.set_param('robot_description', urdf_string)
@@ -126,6 +130,7 @@ class TraceALine:
         
         #if args.no_ros:
         self.ik_solver = ik_solver(path_to_src)
+        
         
         initial_ik = None
         if self.side == "both":
@@ -156,6 +161,12 @@ class TraceALine:
                 raise NotImplementedError()
         else:
             starting_config = settings['starting_config']
+        
+        
+        ### debug    
+        # self.initial_ik = initial_ik
+        # self.settings = settings
+        
         starting_config_translated = self.translate_config(starting_config, self.chains_def)
         self.starting_ee_poses = self.robot.fk(starting_config_translated)
         print(starting_config)
@@ -219,17 +230,17 @@ class TraceALine:
             trajs_with_init = trajs
             for i, traj in enumerate(trajs):
                 traj_lengths.append(len(trajs[i]))
-        # print(trajs_with_init)
         
         # fill trajectory with initial position if provided trajs are less than num of arms
         if self.side == "right":
-            shape0 = trajs_with_init[0].shape
+            shape0 = (trajs_with_init[0].shape[0], 1)
             trajs_with_init.append(np.tile(np.array(self.init_position[1] + self.init_orientation[1]), shape0))
             traj_lengths.append(len(trajs_with_init[1]))
         elif self.side == "left":
-            shape0 = trajs_with_init[0].shape
+            shape0 = (trajs_with_init[0].shape[0], 1)
             trajs_with_init.insert(0, np.tile(np.array(self.init_position[0] + self.init_orientation[0]), shape0))
             traj_lengths.insert(0, len(trajs_with_init[0]))
+        
         
         assert(all(l == traj_lengths[0] for l in traj_lengths))
         
@@ -239,7 +250,7 @@ class TraceALine:
         self.trajectory_index = 0
         print(len(self.trajectory),len(self.weight_updates))
         assert(len(self.trajectory) == len(self.weight_updates))
-        
+
         if not args.no_ros:
             # ROS is present
             if self.use_topic_not_service:
@@ -262,8 +273,12 @@ class TraceALine:
                 print("Start line tracing in {} seconds".format(count_down))
                 count_down -= 1
                 if count_down == 0:
+                    self.reset(self.starting_config)
                     break
+                
                 count_down_rate.sleep()
+                
+            time.sleep(5)
             self.timer = rospy.Timer(rospy.Duration(self.time_between / self.num_per_goal), self.timer_callback)
             self.ik_solver = None
             
@@ -272,11 +287,54 @@ class TraceALine:
             # print(self.ik_solver.weight_names)
             # loss = self.ik_solver.query_loss(starting_config)
             # print(f"Initial Loss: {loss}")
+            self.starting_config = starting_config[:]
             self.ik_solver.reset(starting_config)
             pass
             # print(self.trajectory)
-        self.starting_config = starting_config
-            
+    
+    def rebuild_ik_solver(self, config):
+        """
+        Rebuild the ik solver, make sure the result is consistent.
+        """
+        self.ik_solver = ik_solver(path_to_src) 
+        self.ik_solver.reset(config)
+    
+    def set_adjustment_trajectory(self, side, cur_config, start: tuple, end: tuple, num_per_goal, dz=0.05) -> None:
+        trajs = []
+        starting_config_translated = self.translate_config(cur_config, self.chains_def)
+        starting_ee_poses = self.robot.fk(starting_config_translated)
+        p0, p1 = unpack_pose_xyz_euler(starting_ee_poses[0]), unpack_pose_xyz_euler(starting_ee_poses[1])
+        init_position    = [p0[0], p1[0]]
+        init_orientation = [p0[1], p1[1]] 
+        if side == "left":
+            init_pos = np.array(init_position[1] + init_orientation[1])
+        elif side == "right":
+            init_pos = np.array(init_position[0] + init_orientation[0])
+        else:
+            raise ValueError(side)
+    
+        trajs.append(np.vstack([
+            init_pos,                                              # lift
+            init_pos + np.array([0,0,dz,0,0,0]),                   # move to above start
+            start + np.array([0,0,dz,0,0,0]),                      # move to end
+            start,
+            end
+        ]))
+        
+        
+        # fill trajectory with initial position if provided trajs are less than num of arms
+        shape0 = (trajs[0].shape[0], 1)
+        if side == "right":
+            trajs.append(np.tile(np.array(init_position[1] + init_orientation[1]), shape0))
+        elif side == "left":
+            trajs.insert(0, np.tile(np.array(init_position[0] + init_orientation[0]), shape0))
+        
+        print(trajs)
+        
+        print(np.array(trajs).shape)
+        trajectory = self.generate_trajectory(trajs, num_per_goal)
+        self.trajectory = trajectory
+        
     def generate_trajectory(self, trajs, num_per_goal):
         
         assert len(trajs) == self.robot.num_active_chains
@@ -316,8 +374,8 @@ class TraceALine:
             num_empty_updates = num_per_goal
             if self.start_from_init_pose and i == 0:
                 upd = {
-                    'eepos' : 500.0,
-                    'eequat' : 5.0,
+                    'eepos' : 500,
+                    'eequat' : 100,
                     'minvel'  : 0.5,
                     'minacc'  : 0.3,
                     'minjerk' : 0.1,
@@ -327,24 +385,24 @@ class TraceALine:
                 }
                 for arm_idx in range(self.robot.num_chain):
                     upd[f"envcollision_{arm_idx}"] = 0.5
-                
-                
+            
                 weight_updates.append(upd)
                 num_empty_updates -= 1
             elif self.start_from_init_pose and i == 1:
                 
                 upd = {
-                    'eequat'  : 5.0,
+                    'eequat_x' : 10.0,
+                    'eequat_y' : 10.0,
+                    'eequat_z' : 10.0,
                     'minvel'  : 0.7,
                     'minacc'  : 0.5,
                     'minjerk' : 0.3,
-                    'selfcollision_ee' : 2,
-                    'envcollision': 10.0,
+                    'selfcollision_ee' : 1.0,
                     'jointlimit' : 3.0,
                 }
                 for arm_idx in range(self.robot.num_chain):
                     if self.robot.is_active_chain[arm_idx]:
-                        upd[f"envcollision_{arm_idx}"] = 2.0
+                        upd[f"envcollision_{arm_idx}"] = 10.0
                     else:
                         upd[f"envcollision_{arm_idx}"] = 5.0
                 weight_updates.append(upd)
@@ -379,13 +437,6 @@ class TraceALine:
         js_msg.joint_angles = config
         self.ik_reset_pub.publish(js_msg)
     
-    def query_loss(self, config):
-        js_msg = JointState()
-        js_msg.header.stamp = rospy.Time.now()
-        js_msg.name = self.robot.articulated_joint_names
-        js_msg.position = config
-        self.ik_reset_pub.publish(js_msg)
-    
     def timer_callback(self, event):
         if self.trajectory_index >= len(self.trajectory):
             if self.loop:
@@ -394,9 +445,7 @@ class TraceALine:
             else:
                 rospy.signal_shutdown("Trajectory finished")
             return
-        if self.trajectory_index == 0:
-            self.reset(self.starting_config)
-            time.sleep(1)
+            
         if self.use_topic_not_service:
             ee_pose_goals = EEPoseGoals()
             for i in range(self.robot.num_active_chains):
@@ -412,7 +461,6 @@ class TraceALine:
                 msg = IKUpdateWeight()
                 msg.weight_name = k
                 msg.value = v
-                print(msg)
                 self.ik_weight_pub.publish(msg)
         else:
             req = IKPoseRequest()
@@ -427,7 +475,7 @@ class TraceALine:
 
         self.trajectory_index += 1
     
-    def get_ik_list_from_traj(self) -> list:
+    def get_ik_list_from_traj(self, update_weights=True) -> list:
         """
         Generate list of IK solutions from trajectory without the need of ROS.
         """
@@ -445,15 +493,16 @@ class TraceALine:
                     tolerances.extend(self.tolerances[i])
                 else:
                     tolerances.extend(self.tolerances[0])
-            
-            self.ik_solver.update_objective_weights(self.weight_updates[j])
+            if update_weights:
+                self.ik_solver.update_objective_weights(self.weight_updates[j])
             
             # print(positions, orientations, tolerances)
             ik_solution = self.ik_solver.solve_pose_goals(positions, orientations, tolerances)
             ik_solutions.append(ik_solution)
             losses = self.ik_solver.query_loss(ik_solution)
+            
             print(f"Total Loss: {sum(losses)}")
-            print(self.get_individual_loss(losses, ['eepos', "eequat"]))
+            print(self.get_individual_loss(losses, ['eepos_0', 'eequat_0', 'eepos_4', 'eequat_4']))
             # print(j)
             
         return ik_solutions
@@ -481,7 +530,11 @@ class TraceALine:
         return ret
                     
                 
-    
+def save_ik_list(ik_list, path):
+    ik_arr = [movo_jointangles_rik2fik(x) for x in ik_list]
+    ik_arr = np.array(ik_arr)
+    np.save(path, ik_arr)
+  
 if __name__ == '__main__':
     fpath = os.path.dirname(os.path.abspath(__file__))
     if not args.no_ros:
@@ -501,17 +554,37 @@ if __name__ == '__main__':
         
     if args.no_ros:
         
+        
         ik_list = trace_a_line.get_ik_list_from_traj()
-        
-        ik_arr = [movo_jointangles_rik2fik(x) for x in ik_list]
-        ik_arr = np.array(ik_arr)
-        np.save(f"{fpath}/ik_seq{trace_a_line.episode}.npy", ik_arr)
+        save_ik_list(ik_list, f"{fpath}/ik_seq{trace_a_line.episode}.npy")
         
         
-        # Try another time to test the reset function
-        # trace_a_line.ik_solver.reset(trace_a_line.starting_config)
-        # ik_list_1 = trace_a_line.get_ik_list_from_traj()
-        # # should be exactly the same
-        # print(ik_list[-1])
-        # print(ik_list_1[-1])
+        def reset_consistency_check():
+            """
+            Do the same thing for another time to test the reset function
+            """
+            trace_a_line.rebuild_ik_solver(trace_a_line.starting_config)
+            ik_list_1 = trace_a_line.get_ik_list_from_traj()
+            # should be exactly the same
+            print(ik_list[-1])
+            print(ik_list_1[-1])
+            
+        # reset_consistency_check()
+        
+        
+        # Adjust for residual policy
+        
+        final_config = ik_list[-1]
+        side = input("Next adjust the left / right hand? (left/right): ")
+        trace_a_line.rebuild_ik_solver(final_config)
+        
+        start = np.array((0.5, 0.8, 0.5, 0, 0, 0))
+        end   = np.array((0.7, 0.8, 0.5, 0, 0, 0))
+        trace_a_line.set_adjustment_trajectory(side, final_config, start, end, 20)
+        ik_list_1 = trace_a_line.get_ik_list_from_traj()
+        save_ik_list(ik_list_1, f"{fpath}/ik_seq{trace_a_line.episode}_residual.npy")
+        
+
+    
+        
         

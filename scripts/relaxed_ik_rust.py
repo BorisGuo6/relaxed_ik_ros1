@@ -178,7 +178,7 @@ class RelaxedIK:
         # print(positions)
         ik_solution = self.relaxed_ik.solve_position(positions, orientations, tolerances)
         # print(self.robot.articulated_joint_names)
-        print(ik_solution)
+        # print(ik_solution)
         # print(f"{(time.time() - t0)*1000:.2f}ms")
         # Publish the joint angle solution
         self.js_msg.header.stamp = rospy.Time.now()
@@ -234,7 +234,13 @@ class RelaxedIK:
         })
     
     def update_objective_weights(self, weights_dict: dict):
+        if not weights_dict:
+            return 
         print(weights_dict)
+        
+        for k in weights_dict:
+            if k not in self.weight_names:
+                raise KeyError(k)
         for i in range(len(self.weight_names)):
             weight_name = self.weight_names[i]
             if weight_name in weights_dict:
@@ -247,9 +253,14 @@ if __name__ == '__main__':
     rospy.init_node('relaxed_ik')
     print("RELAXED_IK_RUST.PY")
     relaxed_ik = RelaxedIK()
+    # relaxed_ik.relaxed_ik.set_env_collision_tip_offset(0)
     # relaxed_ik.update_objective_weights({
-    #     'eepos' : 100.0
+    #     'eepos_4' : 0.0,
+    #     'eequat_4' : 0.0,
     # })
+    # enforce_joint_angles = [-10.0,-10.0,-10.0,-10.0,-10.0,-10.0,-10.0,  -10.0, 0.9, 0.9, 0.9, 1.5, 0.2, 0.0, 2.0, -2.0, 1.2354, 1.1, 0.9, 0.9, 0.9]
+    # relaxed_ik.relaxed_ik.update_enforce_joint_angles(enforce_joint_angles)
+    
     print(relaxed_ik.relaxed_ik.get_objective_weight_names())
     print(relaxed_ik.relaxed_ik.get_objective_weight_priors())
     rospy.spin()
