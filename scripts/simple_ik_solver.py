@@ -13,7 +13,7 @@ from relaxed_ik_ros1.scripts.robot import Robot
 from relaxed_ik_ros1.scripts.robot_utils import movo_jointangles_fik2rik, movo_jointangles_rik2fik
 from typing import List
 
-path_to_src = "/home/transfer/knotting/planning/movo_stack/movo_stack/client_weikun/relaxed_ik_ros1/relaxed_ik_core"
+path_to_src = "planning/movo_stack/movo_stack/client_weikun/relaxed_ik_ros1/relaxed_ik_core"
 
 class TraceALine:
     def __init__(self):

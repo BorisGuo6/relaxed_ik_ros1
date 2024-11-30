@@ -39,7 +39,7 @@ def print_chains_joints(chains):
                 print(f'{element.name},')
                 
 def main():
-    robot = urdf.URDF.from_xml_file('/home/ubuntu/rangedik_project/src/relaxed_ik_ros1/relaxed_ik_core/configs/urdfs/simplified_movo.urdf')
+    robot = urdf.URDF.from_xml_file('planning/movo_stack/movo_stack/client_weikun/relaxed_ik_ros1/relaxed_ik_core/configs/urdfs/simplified_movo.urdf')
 
     # Assuming the root joint is the first joint in the list
     
